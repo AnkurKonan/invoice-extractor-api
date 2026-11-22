@@ -1,11 +1,18 @@
 name = "invoice-extractor-api"
 main = "src/index.ts"
 compatibility_date = "2026-11-01"
-compatibility_flags = ["nodejs_compat"]
 
 [ai]
 binding = "AI"
 
-# Optional: set a default API key (you can also set it via wrangler secret)
-# [vars]
-# API_KEY = "sk-your-secret-key"
+[[d1_databases]]
+binding = "DB"
+database_name = "invoice-extractor"
+database_id = "PASTE_ID_FROM_wrangler_d1_create"
+
+[observability]
+enabled = true
+
+# Secrets (never put these in this file):
+#   npx wrangler secret put ADMIN_TOKEN              <- required, long random string
+#   npx wrangler secret put RAPIDAPI_PROXY_SECRET    <- only if you sell via RapidAPI
