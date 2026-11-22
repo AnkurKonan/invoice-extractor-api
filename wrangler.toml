@@ -8,7 +8,7 @@ binding = "AI"
 [[d1_databases]]
 binding = "DB"
 database_name = "invoice-extractor"
-database_id = "PASTE_ID_FROM_wrangler_d1_create"
+database_id = "03e369c0-2488-424a-8fee-d754cd1e8cee"
 
 [observability]
 enabled = true
