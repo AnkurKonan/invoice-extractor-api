@@ -1,6 +1,6 @@
 import type { Env, Principal } from "./types";
 import { PLANS, authenticate, currentPeriod, enforceRateLimit, getUsage, refundQuota, reserveQuota } from "./auth";
-import { DEFAULT_TEXT_MODEL, acceptVisionLicense, explainResult, extractDocument, type DocInput } from "./extract";
+import { DEFAULT_TEXT_MODEL, acceptVisionLicense, debugVision, explainResult, extractDocument, type DocInput } from "./extract";
 import { HttpError, corsHeaders, decodeBase64, detectFileKind, jsonResponse, randomHex, safeEqual, sha256Hex } from "./util";
 import { normalize } from "./validate";
 
@@ -197,12 +197,21 @@ async function admin(request: Request, env: Env, path: string, method: string): 
   }
 
   if (path === "/admin/vision-agree" && method === "POST") {
+    await acceptVisionLicense(env);
+    return jsonResponse(env, { ok: true, note: `Vision licence accepted. Text model is ${env.TEXT_MODEL || DEFAULT_TEXT_MODEL}.` });
+  }
+
+  if (path === "/admin/debug-image" && method === "POST") {
+    const body = await readJson(request);
+    if (typeof body.file_base64 !== "string") throw new HttpError(400, "invalid_request", "Provide 'file_base64'.");
+    const bytes = decodeBase64(body.file_base64);
+    const kind = detectFileKind(bytes);
+    if (!kind || kind === "pdf") throw new HttpError(415, "unsupported_file_type", "Provide a PNG, JPEG or WEBP image.");
     try {
-      await acceptVisionLicense(env);
+      return jsonResponse(env, await debugVision(env, kind, bytes));
     } catch (e) {
       return jsonResponse(env, { ok: false, error: String((e as Error)?.message || e).slice(0, 500) }, 502);
     }
-    return jsonResponse(env, { ok: true, note: `Vision licence accepted. Text model is ${env.TEXT_MODEL || DEFAULT_TEXT_MODEL}.` });
   }
 
   throw new HttpError(404, "not_found", "Unknown endpoint.");

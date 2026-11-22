@@ -118,11 +118,11 @@ async function extractFromText(env: Env, text: string): Promise<{ parsed: Record
   throw lastErr instanceof HttpError ? lastErr : new HttpError(502, "model_output_invalid", "The AI returned unreadable output. You were not charged; please retry.");
 }
 
-async function extractFromImage(env: Env, fileKind: FileKind, bytes: Uint8Array): Promise<{ parsed: Record<string, unknown>; model: string }> {
+async function runVision(env: Env, fileKind: FileKind, bytes: Uint8Array): Promise<unknown> {
   const model = env.VISION_MODEL || DEFAULT_VISION_MODEL;
   const mime = fileKind === "png" ? "image/png" : fileKind === "webp" ? "image/webp" : "image/jpeg";
   // Llama 3.2 Vision does not accept a system prompt together with an image, so instructions go in the user turn.
-  const raw = await run(env, model, {
+  return run(env, model, {
     messages: [
       {
         role: "user",
@@ -135,11 +135,23 @@ async function extractFromImage(env: Env, fileKind: FileKind, bytes: Uint8Array)
     max_tokens: 4096,
     temperature: 0,
   });
+}
+
+async function extractFromImage(env: Env, fileKind: FileKind, bytes: Uint8Array): Promise<{ parsed: Record<string, unknown>; model: string }> {
+  const model = env.VISION_MODEL || DEFAULT_VISION_MODEL;
+  const raw = await runVision(env, fileKind, bytes);
   try {
     return { parsed: parseModelJson(raw), model };
   } catch {
     throw new HttpError(502, "model_output_invalid", "The AI returned unreadable output. You were not charged; please retry.");
   }
+}
+
+/** Admin-only diagnostic: returns what the vision model actually said. */
+export async function debugVision(env: Env, fileKind: FileKind, bytes: Uint8Array): Promise<{ type: string; length: number; preview: string }> {
+  const raw = await runVision(env, fileKind, bytes);
+  const text = typeof raw === "string" ? raw : JSON.stringify(raw);
+  return { type: typeof raw, length: text?.length ?? 0, preview: (text ?? "").slice(0, 2000) };
 }
 
 export async function extractDocument(env: Env, input: DocInput): Promise<{ parsed: Record<string, unknown>; model: string }> {
