@@ -118,6 +118,7 @@ async function extractFromText(env: Env, text: string): Promise<{ parsed: Record
   throw lastErr instanceof HttpError ? lastErr : new HttpError(502, "model_output_invalid", "The AI returned unreadable output. You were not charged; please retry.");
 }
 
+/** Step 1 for images: the vision model only TRANSCRIBES. Vision models read well but are unreliable at strict JSON. */
 async function runVision(env: Env, fileKind: FileKind, bytes: Uint8Array): Promise<unknown> {
   const model = env.VISION_MODEL || DEFAULT_VISION_MODEL;
   const mime = fileKind === "png" ? "image/png" : fileKind === "webp" ? "image/webp" : "image/jpeg";
@@ -127,24 +128,31 @@ async function runVision(env: Env, fileKind: FileKind, bytes: Uint8Array): Promi
       {
         role: "user",
         content: [
-          { type: "text", text: FIELD_RULES + "\n\nExtract the data from the invoice/receipt image below. Respond with the JSON object only." },
+          {
+            type: "text",
+            text:
+              "Transcribe ALL text in this invoice or receipt image exactly as printed. Include the vendor, invoice number, dates, " +
+              "every line item row (description, quantity, unit, unit price, amount), and all totals, tax, shipping and discounts. " +
+              "Keep each table row on its own line. Output plain text only. Do not summarise, do not explain, do not add anything.",
+          },
           { type: "image_url", image_url: { url: `data:${mime};base64,${bytesToBase64(bytes)}` } },
         ],
       },
     ],
-    max_tokens: 4096,
+    max_tokens: 3000,
     temperature: 0,
   });
 }
 
+/** Step 2: the strong text model turns the transcript into schema-constrained JSON. */
 async function extractFromImage(env: Env, fileKind: FileKind, bytes: Uint8Array): Promise<{ parsed: Record<string, unknown>; model: string }> {
-  const model = env.VISION_MODEL || DEFAULT_VISION_MODEL;
   const raw = await runVision(env, fileKind, bytes);
-  try {
-    return { parsed: parseModelJson(raw), model };
-  } catch {
-    throw new HttpError(502, "model_output_invalid", "The AI returned unreadable output. You were not charged; please retry.");
+  const transcript = (typeof raw === "string" ? raw : JSON.stringify(raw ?? "")).trim();
+  if (transcript.replace(/\s+/g, "").length < 20) {
+    throw new HttpError(422, "image_unreadable", "Could not read any text in this image. Use a clearer, well-lit, full-page image.");
   }
+  const out = await extractFromText(env, transcript.slice(0, 60_000));
+  return { parsed: out.parsed, model: `${env.VISION_MODEL || DEFAULT_VISION_MODEL} + ${out.model}` };
 }
 
 /** Admin-only diagnostic: returns what the vision model actually said. */
