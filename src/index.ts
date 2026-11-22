@@ -197,7 +197,11 @@ async function admin(request: Request, env: Env, path: string, method: string): 
   }
 
   if (path === "/admin/vision-agree" && method === "POST") {
-    await acceptVisionLicense(env);
+    try {
+      await acceptVisionLicense(env);
+    } catch (e) {
+      return jsonResponse(env, { ok: false, error: String((e as Error)?.message || e).slice(0, 500) }, 502);
+    }
     return jsonResponse(env, { ok: true, note: `Vision licence accepted. Text model is ${env.TEXT_MODEL || DEFAULT_TEXT_MODEL}.` });
   }
 
