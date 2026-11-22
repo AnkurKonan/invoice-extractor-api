@@ -1,0 +1,11 @@
+name = "invoice-extractor-api"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[ai]
+binding = "AI"
+
+# Optional: set a default API key (you can also set it via wrangler secret)
+# [vars]
+# API_KEY = "sk-your-secret-key"
